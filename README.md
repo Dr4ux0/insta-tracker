@@ -22,16 +22,21 @@ O app mostra:
 pip install -r requirements.txt
 ```
 
-## Como pegar o sessionid
+## Como pegar o sessionid do Instagram
 
-1. Entre no Instagram pelo navegador.
-2. Abra as ferramentas de desenvolvedor.
-3. Va em `Application` ou `Storage`.
-4. Abra `Cookies`.
-5. Selecione `https://www.instagram.com`.
-6. Copie o valor do cookie `sessionid`.
+1. Entre no Instagram pelo navegador: `https://www.instagram.com`.
+2. Com o Instagram aberto, pressione `F12`.
+   - Se nao abrir, tente `Ctrl + Shift + I`.
+3. Nas ferramentas de desenvolvedor, abra a area de armazenamento:
+   - Chrome/Edge: aba `Application`.
+   - Firefox: aba `Storage` ou `Armazenamento`.
+4. No menu lateral, abra `Cookies`.
+5. Clique em `https://www.instagram.com`.
+6. Na tabela de cookies, procure a linha chamada `sessionid`.
+7. Copie o conteudo da coluna `Value` ou `Valor`.
+8. Cole esse valor no campo `Sessionid` da tela de login do Insta Tracker.
 
-Voce tambem pode colar a linha completa de cookies se ela contiver `sessionid`.
+Voce tambem pode colar a linha completa de cookies no app, desde que ela contenha `sessionid=...`.
 
 ## Como rodar
 
