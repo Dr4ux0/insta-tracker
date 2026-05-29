@@ -1,3 +1,5 @@
+# Portugues
+
 # Insta Tracker
 
 Aplicação Flask para comparar seguidores e seguindo de uma conta do Instagram usando o cookie `sessionid`.
@@ -61,6 +63,85 @@ Cole o `sessionid` na tela de login e entre.
 - As fotos de perfil passam pelo endpoint local `/avatar` para evitar bloqueios de imagem da CDN do Instagram.
 
 ## Estrutura
+
+```text
+app.py
+requirements.txt
+static/
+  dashboard.js
+  login.js
+  css/
+    style.css
+templates/
+  index.html
+  login.html
+```
+
+# English
+
+# Insta Tracker
+
+Flask application to compare followers and following of an Instagram account using the `sessionid` cookie.
+
+The app shows:
+
+- Total followers
+- Total following
+- Who you follow but doesn't follow you back
+- Who follows you but you don't follow back
+- Profile picture, name, and @handle of found profiles
+- CSV export
+
+## Requirements
+
+- Python 3.10+
+- An Instagram account logged in via browser
+
+## Installation
+
+```powershell
+pip install -r requirements.txt
+```
+
+## How to get the Instagram sessionid
+
+1. Go to Instagram in your browser: `https://www.instagram.com`.
+2. With Instagram open, press `F12`.
+   - If it doesn't open, try `Ctrl + Shift + I`.
+3. In developer tools, open the storage area:
+   - Chrome/Edge: `Application` tab.
+   - Firefox: `Storage` tab.
+4. In the sidebar, expand `Cookies`.
+5. Click on `https://www.instagram.com`.
+6. In the cookie table, find the row named `sessionid`.
+7. Copy the content of the `Value` column.
+8. Paste this value into the `Sessionid` field on the Insta Tracker login screen.
+
+You can also paste the full cookie string into the app, as long as it contains `sessionid=...`.
+
+## How to run
+
+```powershell
+python app.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5000
+```
+
+Paste the `sessionid` on the login screen and sign in.
+
+## Notes
+
+- The app does not save passwords.
+- The app does not use `instaloader`.
+- The app depends on the `sessionid` being valid.
+- If Instagram expires or blocks the session, log out in the app, copy a new `sessionid`, and log in again.
+- Profile pictures are served through the local `/avatar` endpoint to avoid blocking issues from Instagram's CDN.
+
+## Structure
 
 ```text
 app.py
