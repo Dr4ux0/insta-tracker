@@ -1,76 +1,158 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file, Response
 from functools import wraps
-import instaloader
-import requests
+from urllib.parse import unquote
 import csv
 import io
-import os
 import json
+import os
+
+import requests
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "troque-esta-chave-em-producao")
 
 
-# ── Decorador de autenticação ─────────────────────────────────────────────────
+class SessionExpired(Exception):
+    pass
+
 
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "username" not in session:
+        if "sessionid" not in session or "user_id" not in session:
             return redirect(url_for("login"))
         return f(*args, **kwargs)
+
     return decorated
 
 
-# ── Helper do Instaloader ─────────────────────────────────────────────────────
-
-def get_loader():
-    """Cria um Instaloader autenticado via sessionid salvo na sessão."""
-    L = instaloader.Instaloader()
-    L.context._session.cookies.set("sessionid", session["sessionid"], domain=".instagram.com")
-    L.context.username = session["username"]
-    return L
+def extract_cookie_value(raw_value, name):
+    for part in raw_value.split(";"):
+        key, _, value = part.strip().partition("=")
+        if key == name and value:
+            return value.strip()
+    return ""
 
 
-# ── Rotas de autenticação ─────────────────────────────────────────────────────
+def normalize_sessionid(raw_value):
+    value = raw_value.strip()
+    return extract_cookie_value(value, "sessionid") or value
+
+
+def extract_user_id(sessionid, raw_cookie=""):
+    ds_user_id = extract_cookie_value(raw_cookie, "ds_user_id")
+    if ds_user_id:
+        return ds_user_id
+
+    decoded = unquote(sessionid)
+    user_id, separator, _ = decoded.partition(":")
+    if separator and user_id.isdigit():
+        return user_id
+
+    return ""
+
+
+def make_instagram_session(sessionid):
+    http = requests.Session()
+    http.cookies.set("sessionid", sessionid, domain=".instagram.com")
+    http.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/plain, */*",
+        "X-IG-App-ID": "936619743392459",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": "https://www.instagram.com/",
+    })
+    return http
+
+
+def fetch_friendship_users(http, user_id, relation):
+    users = {}
+    max_id = None
+    url = f"https://www.instagram.com/api/v1/friendships/{user_id}/{relation}/"
+
+    while True:
+        params = {"count": 200}
+        if max_id:
+            params["max_id"] = max_id
+
+        response = http.get(url, params=params, timeout=30)
+        if response.status_code in (401, 403):
+            raise SessionExpired("Sessionid expirado ou sem permissão.")
+        response.raise_for_status()
+
+        payload = response.json()
+        if payload.get("status") == "fail":
+            raise RuntimeError(payload.get("message") or "Instagram recusou a requisição.")
+
+        for user in payload.get("users", []):
+            username = user.get("username")
+            if username:
+                users[username] = user.get("full_name") or username
+
+        max_id = payload.get("next_max_id")
+        if not max_id:
+            return users
+
+
+def build_stats_data(user_id, followers, following):
+    not_following_back = [
+        {"username": username, "full_name": following[username]}
+        for username in following if username not in followers
+    ]
+    you_not_following_back = [
+        {"username": username, "full_name": followers[username]}
+        for username in followers if username not in following
+    ]
+
+    return {
+        "username": f"id_{user_id}",
+        "full_name": "Conta conectada",
+        "followers_count": len(followers),
+        "following_count": len(following),
+        "not_following_back_count": len(not_following_back),
+        "you_not_following_back_count": len(you_not_following_back),
+        "not_following_back": not_following_back,
+        "you_not_following_back": you_not_following_back,
+        "delta_followers": None,
+        "delta_following": None,
+    }
+
+
+def collect_profile_stats(sessionid, user_id):
+    http = make_instagram_session(sessionid)
+    followers = fetch_friendship_users(http, user_id, "followers")
+    following = fetch_friendship_users(http, user_id, "following")
+    return build_stats_data(user_id, followers, following)
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if "username" in session:
+    if "sessionid" in session and "user_id" in session:
         return redirect(url_for("home"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip().lstrip("@")
-        password = request.form.get("password", "")
+        raw_sessionid = request.form.get("sessionid", "")
+        sessionid = normalize_sessionid(raw_sessionid)
+        user_id = extract_user_id(sessionid, raw_sessionid)
 
-        if not username or not password:
-            flash("Preencha o usuário e a senha.", "error")
+        if not sessionid:
+            flash("Informe o sessionid da conta já logada.", "error")
             return render_template("login.html")
 
-        try:
-            L = instaloader.Instaloader()
-            L.login(username, password)
+        if not user_id:
+            flash("Não consegui encontrar o ID da conta no sessionid. Cole o valor completo do cookie.", "error")
+            return render_template("login.html")
 
-            # Extrai o sessionid do cookie para reutilizar nas próximas requisições
-            sessionid = L.context._session.cookies.get("sessionid", domain=".instagram.com")
-
-            if not sessionid:
-                flash("Não foi possível obter a sessão. Verifique suas credenciais.", "error")
-                return render_template("login.html")
-
-            session["sessionid"] = sessionid
-            session["username"]  = username
-            session["full_name"] = username
-            return redirect(url_for("home"))
-
-        except instaloader.exceptions.BadCredentialsException:
-            flash("Usuário ou senha incorretos.", "error")
-        except instaloader.exceptions.TwoFactorAuthRequiredException:
-            flash("Sua conta tem autenticação de dois fatores ativa. Use o sessionid manualmente.", "warning")
-        except instaloader.exceptions.ConnectionException as e:
-            flash(f"Erro de conexão: {str(e)}", "error")
-        except Exception as e:
-            flash(f"Erro inesperado: {str(e)}", "error")
+        session["sessionid"] = sessionid
+        session["user_id"] = user_id
+        session["username"] = f"id_{user_id}"
+        session["full_name"] = "Conta conectada"
+        return redirect(url_for("home"))
 
     return render_template("login.html")
 
@@ -81,21 +163,17 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
-
 @app.route("/")
 @login_required
 def home():
     return render_template("index.html")
 
 
-# ── SSE: stats com progresso em tempo real ────────────────────────────────────
-
 @app.route("/api/stats/stream")
 @login_required
 def api_stats_stream():
-    sessionid = session.get("sessionid")
-    username  = session.get("username")
+    sessionid = session["sessionid"]
+    user_id = session["user_id"]
 
     def generate():
         def event(pct, msg, data=None):
@@ -105,58 +183,21 @@ def api_stats_stream():
             return f"data: {json.dumps(payload)}\n\n"
 
         try:
-            yield event(10, "Conectando ao Instagram…")
+            yield event(10, "Conectando ao Instagram...")
+            http = make_instagram_session(sessionid)
 
-            L = instaloader.Instaloader()
-            L.context._session.cookies.set("sessionid", sessionid, domain=".instagram.com")
-            L.context.username = username
+            yield event(30, "Buscando seguidores...")
+            followers = fetch_friendship_users(http, user_id, "followers")
+            yield event(55, f"Seguidores carregados: {len(followers)}")
 
-            yield event(20, "Buscando perfil…")
-            profile = instaloader.Profile.from_username(L.context, username)
+            yield event(70, "Buscando quem voce segue...")
+            following = fetch_friendship_users(http, user_id, "following")
+            yield event(85, f"Seguindo carregados: {len(following)}")
 
-            yield event(30, "Buscando seguidores…")
-            try:
-                followers = {p.username: p.full_name for p in profile.get_followers()}
-                yield event(50, f"Seguidores carregados: {len(followers)}")
-            except Exception as e:
-                yield f"data: {json.dumps({'error': 'get_followers falhou: ' + str(e)})}\n\n"
-                return
-
-            yield event(65, "Buscando quem você segue…")
-            try:
-                following = {p.username: p.full_name for p in profile.get_followees()}
-                yield event(80, f"Seguindo carregados: {len(following)}")
-            except Exception as e:
-                yield f"data: {json.dumps({'error': 'get_followees falhou: ' + str(e)})}\n\n"
-                return
-
-            yield event(88, "Calculando diferenças…")
-
-            not_following_back = [
-                {"username": u, "full_name": following[u]}
-                for u in following if u not in followers
-            ]
-            you_not_following_back = [
-                {"username": u, "full_name": followers[u]}
-                for u in followers if u not in following
-            ]
-
-            data = {
-                "username":                     profile.username,
-                "full_name":                    profile.full_name,
-                "followers_count":              profile.followers,
-                "following_count":              profile.followees,
-                "not_following_back_count":     len(not_following_back),
-                "you_not_following_back_count": len(you_not_following_back),
-                "not_following_back":           not_following_back,
-                "you_not_following_back":       you_not_following_back,
-                "delta_followers":              None,
-                "delta_following":              None,
-            }
-
-            yield event(100, "Tudo pronto!", data)
-
-        except instaloader.exceptions.LoginRequiredException:
+            yield event(95, "Calculando diferencas...")
+            yield event(100, "Tudo pronto!", build_stats_data(user_id, followers, following))
+        except SessionExpired:
+            session.clear()
             yield f"data: {json.dumps({'error': 'login_required'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -165,128 +206,38 @@ def api_stats_stream():
         generate(),
         mimetype="text/event-stream",
         headers={
-            "Cache-Control":     "no-cache",
+            "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-            "Connection":        "keep-alive",
-        }
+            "Connection": "keep-alive",
+        },
     )
 
-
-# ── Endpoint legado (mantido para compatibilidade) ────────────────────────────
-
-@app.route("/api/stats")
-@login_required
-def api_stats():
-    try:
-        L = get_loader()
-        profile = instaloader.Profile.from_username(L.context, session["username"])
-
-        followers = {p.username: p.full_name for p in profile.get_followers()}
-        following = {p.username: p.full_name for p in profile.get_followees()}
-
-        not_following_back = [
-            {"username": u, "full_name": following[u]}
-            for u in following if u not in followers
-        ]
-        you_not_following_back = [
-            {"username": u, "full_name": followers[u]}
-            for u in followers if u not in following
-        ]
-
-        return jsonify({
-            "username":                     profile.username,
-            "full_name":                    profile.full_name,
-            "followers_count":              profile.followers,
-            "following_count":              profile.followees,
-            "not_following_back_count":     len(not_following_back),
-            "you_not_following_back_count": len(you_not_following_back),
-            "not_following_back":           not_following_back,
-            "you_not_following_back":       you_not_following_back,
-            "delta_followers":              None,
-            "delta_following":              None,
-        })
-    except instaloader.exceptions.LoginRequiredException:
-        session.clear()
-        return jsonify({"error": "Sessão expirada"}), 401
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ── Ações de seguir / deixar de seguir ───────────────────────────────────────
-
-@app.route("/action/unfollow", methods=["POST"])
-@login_required
-def action_unfollow():
-    data = request.get_json()
-    username = data.get("username")
-    if not username:
-        return jsonify({"error": "username obrigatório"}), 400
-    try:
-        L = get_loader()
-        profile = instaloader.Profile.from_username(L.context, username)
-        L.unfollow(profile.userid)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/action/follow", methods=["POST"])
-@login_required
-def action_follow():
-    data = request.get_json()
-    username = data.get("username")
-    if not username:
-        return jsonify({"error": "username obrigatório"}), 400
-    try:
-        L = get_loader()
-        profile = instaloader.Profile.from_username(L.context, username)
-        L.follow(profile.userid)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ── Exportar CSV ──────────────────────────────────────────────────────────────
 
 @app.route("/export/csv")
 @login_required
 def export_csv():
     try:
-        L = get_loader()
-        profile = instaloader.Profile.from_username(L.context, session["username"])
+        data = collect_profile_stats(session["sessionid"], session["user_id"])
+    except SessionExpired:
+        session.clear()
+        return redirect(url_for("login"))
 
-        followers = {p.username: p.full_name for p in profile.get_followers()}
-        following = {p.username: p.full_name for p in profile.get_followees()}
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["tipo", "username", "nome_completo"])
+    for user in data["not_following_back"]:
+        writer.writerow(["nao_te_segue_de_volta", user["username"], user["full_name"]])
+    for user in data["you_not_following_back"]:
+        writer.writerow(["voce_nao_segue_de_volta", user["username"], user["full_name"]])
+    output.seek(0)
 
-        not_following_back = [
-            {"username": u, "full_name": following[u]}
-            for u in following if u not in followers
-        ]
-        you_not_following_back = [
-            {"username": u, "full_name": followers[u]}
-            for u in followers if u not in following
-        ]
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=f"insta_tracker_{session['user_id']}.csv",
+    )
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["tipo", "username", "nome_completo"])
-        for u in not_following_back:
-            writer.writerow(["nao_te_segue_de_volta", u["username"], u["full_name"]])
-        for u in you_not_following_back:
-            writer.writerow(["voce_nao_segue_de_volta", u["username"], u["full_name"]])
-        output.seek(0)
-
-        return send_file(
-            io.BytesIO(output.getvalue().encode("utf-8")),
-            mimetype="text/csv",
-            as_attachment=True,
-            download_name=f"insta_tracker_{session['username']}.csv",
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app.run(debug=True)

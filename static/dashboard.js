@@ -165,6 +165,7 @@ function renderList(containerId, users, actionLabel, actionRoute) {
 function handleAction(btn) {
   const username = btn.dataset.username;
   const route    = btn.dataset.route;
+  const originalText = btn.textContent;
 
   btn.disabled    = true;
   btn.textContent = '…';
@@ -174,15 +175,22 @@ function handleAction(btn) {
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ username }),
   })
-    .then(r => r.json())
+    .then(async r => {
+      const payload = await r.json().catch(() => ({}));
+      if (!r.ok || payload.error) {
+        throw new Error(payload.error || 'Erro ao executar ação');
+      }
+      return payload;
+    })
     .then(() => {
       const row = document.getElementById('row-' + username);
       if (row) row.classList.add('done');
       btn.textContent = 'Feito ✓';
     })
-    .catch(() => {
+    .catch(error => {
       btn.disabled    = false;
       btn.textContent = 'Erro — tentar de novo';
+      btn.title = error.message || originalText;
     });
 }
 

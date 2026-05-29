@@ -14,7 +14,7 @@
     <div class="login-card">
       <div class="logo"><i class="ti ti-brand-instagram"></i></div>
       <h1 class="login-title">Insta Tracker</h1>
-      <p class="login-sub">Entre com seu usuário e senha do Instagram</p>
+      <p class="login-sub">Entre usando o sessionid da conta já logada</p>
 
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
@@ -26,20 +26,10 @@
 
       <form action="/login" method="POST" id="login-form">
         <div class="field">
-          <label for="username">Usuário do Instagram</label>
+          <label for="sessionid">Sessionid</label>
           <div class="input-wrap">
-            <i class="ti ti-at"></i>
-            <input type="text" id="username" name="username" placeholder="seu_usuario" autocomplete="username" required />
-          </div>
-        </div>
-        <div class="field">
-          <label for="password">Senha</label>
-          <div class="input-wrap">
-            <i class="ti ti-lock"></i>
-            <input type="password" id="password" name="password" placeholder="Sua senha do Instagram" autocomplete="current-password" required />
-            <button type="button" class="toggle-pw" onclick="togglePassword()" tabindex="-1">
-              <i class="ti ti-eye" id="eye-icon"></i>
-            </button>
+            <i class="ti ti-cookie"></i>
+            <input type="text" id="sessionid" name="sessionid" placeholder="Cole o valor do cookie sessionid" autocomplete="off" required />
           </div>
         </div>
         <button type="submit" class="btn-submit" id="btn-submit">
@@ -50,8 +40,17 @@
 
       <p class="login-notice">
         <i class="ti ti-shield-lock"></i>
-        Suas credenciais são usadas apenas para autenticar com o Instagram e nunca são armazenadas em disco.
+        O sessionid fica apenas na sessão do Flask enquanto você usa o app.
       </p>
+
+      <div class="login-howto">
+        <div class="howto-title"><i class="ti ti-info-circle"></i> Como pegar o sessionid</div>
+        <ol>
+          <li>Entre no Instagram pelo navegador.</li>
+          <li>Abra DevTools, vá em Application/Storage e procure Cookies.</li>
+          <li>Copie o valor de <code>sessionid</code> e cole no campo acima.</li>
+        </ol>
+      </div>
     </div>
   </div>
   <script src="{{ url_for('static', filename='login.js') }}"></script>
