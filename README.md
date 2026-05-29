@@ -1,6 +1,6 @@
 # Insta Tracker
 
-Aplicacao Flask para comparar seguidores e seguindo de uma conta do Instagram usando o cookie `sessionid`.
+Aplicação Flask para comparar seguidores e seguindo de uma conta do Instagram usando o cookie `sessionid`.
 
 O app mostra:
 
@@ -16,7 +16,7 @@ O app mostra:
 - Python 3.10+
 - Uma conta logada no Instagram pelo navegador
 
-## Instalacao
+## Instalação
 
 ```powershell
 pip install -r requirements.txt
