@@ -1,12 +1,126 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Insta-Tracker</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insta Tracker — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 <body>
-    <h1>Insta-Tracker</h1>
-    <p>Instagram followers analysis tool.</p>
+
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo"><i class="ti ti-brand-instagram"></i></div>
+      <div class="header-text">
+        <div class="title">Insta Tracker</div>
+        <div class="subtitle" id="last-update">Carregando…</div>
+      </div>
+      <a href="/logout" class="btn btn-ghost ml-auto">
+        <i class="ti ti-logout"></i> Sair
+      </a>
+    </div>
+
+    <!-- Profile bar -->
+    <div class="profile-bar">
+      <div class="avatar" id="avatar-initials">--</div>
+      <div class="profile-info">
+        <div class="username" id="profile-name">—</div>
+        <div class="handle" id="profile-handle">@—</div>
+      </div>
+      <div class="badge-connected">
+        <i class="ti ti-check"></i> Conectado
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Seguidores</div>
+        <div class="value" id="stat-followers">—</div>
+        <div class="delta" id="delta-followers"></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Seguindo</div>
+        <div class="value" id="stat-following">—</div>
+        <div class="delta" id="delta-following"></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Não te seguem</div>
+        <div class="value" id="stat-nonfollowers">—</div>
+        <div class="delta neg" id="delta-nonfollowers"></div>
+      </div>
+    </div>
+
+    <!-- Bar chart -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-chart-bar"></i> Visão geral</div>
+      </div>
+      <div class="card-body">
+        <div class="bar-row">
+          <div class="bar-label">Seguidores</div>
+          <div class="bar-track"><div class="bar-fill" id="bar-followers" style="background:#dd2a7b"></div></div>
+          <div class="bar-num" id="barnum-followers">—</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Seguindo</div>
+          <div class="bar-track"><div class="bar-fill" id="bar-following" style="background:#8134af"></div></div>
+          <div class="bar-num" id="barnum-following">—</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Não te seguem</div>
+          <div class="bar-track"><div class="bar-fill" id="bar-nonfb" style="background:#f58529"></div></div>
+          <div class="bar-num" id="barnum-nonfb">—</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Você não segue</div>
+          <div class="bar-track"><div class="bar-fill" id="bar-younotfb" style="background:#aaa"></div></div>
+          <div class="bar-num" id="barnum-younotfb">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Não te seguem de volta -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-user-x"></i> Não te seguem de volta</div>
+        <span class="pill pill-danger" id="count-nonfb">—</span>
+      </div>
+      <div id="list-nonfb">
+        <div class="list-loading">Carregando…</div>
+      </div>
+    </div>
+
+    <!-- Você não segue de volta -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-user-check"></i> Você não segue de volta</div>
+        <span class="pill pill-info" id="count-younotfb">—</span>
+      </div>
+      <div id="list-younotfb">
+        <div class="list-loading">Carregando…</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btn-refresh" onclick="loadData()">
+        <i class="ti ti-refresh"></i>
+        <span class="btn-text">Atualizar dados</span>
+        <span class="btn-spinner"></span>
+      </button>
+      <a class="btn" href="/export/csv" download>
+        <i class="ti ti-download"></i> Exportar CSV
+      </a>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
