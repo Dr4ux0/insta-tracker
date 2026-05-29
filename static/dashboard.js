@@ -131,7 +131,7 @@ function updateOverlay(pct, label, sub) {
    RENDER LISTS
 ══════════════════════════════════════════════════════ */
 
-function renderList(containerId, users, actionLabel, actionRoute) {
+function renderList(containerId, users) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
@@ -143,55 +143,24 @@ function renderList(containerId, users, actionLabel, actionRoute) {
   el.innerHTML = users.map((u, i) => {
     const c   = colorFor(i);
     const ini = initials(u.full_name || u.username);
+    const avatar = u.profile_pic_url
+      ? `<img class="u-avatar-img" src="/avatar?url=${encodeURIComponent(u.profile_pic_url)}" alt="" loading="lazy" onerror="this.remove();this.parentElement.textContent='${ini}'" />`
+      : ini;
     return `
       <div class="user-row" id="row-${u.username}">
-        <div class="u-avatar" style="background:${c.bg};color:${c.fg}">${ini}</div>
+        <div class="u-avatar" style="background:${c.bg};color:${c.fg}">${avatar}</div>
         <div class="u-info">
           <div class="u-name">${u.full_name || u.username}</div>
           <div class="u-handle">@${u.username}</div>
         </div>
-        <button
+        <a
           class="u-action"
-          data-username="${u.username}"
-          data-route="${actionRoute}"
-          onclick="handleAction(this)"
-        >${actionLabel}</button>
+          href="https://www.instagram.com/${u.username}/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Ver perfil</a>
       </div>`;
   }).join('');
-}
-
-
-/* ── Action (follow / unfollow) ── */
-function handleAction(btn) {
-  const username = btn.dataset.username;
-  const route    = btn.dataset.route;
-  const originalText = btn.textContent;
-
-  btn.disabled    = true;
-  btn.textContent = '…';
-
-  fetch(route, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ username }),
-  })
-    .then(async r => {
-      const payload = await r.json().catch(() => ({}));
-      if (!r.ok || payload.error) {
-        throw new Error(payload.error || 'Erro ao executar ação');
-      }
-      return payload;
-    })
-    .then(() => {
-      const row = document.getElementById('row-' + username);
-      if (row) row.classList.add('done');
-      btn.textContent = 'Feito ✓';
-    })
-    .catch(error => {
-      btn.disabled    = false;
-      btn.textContent = 'Erro — tentar de novo';
-      btn.title = error.message || originalText;
-    });
 }
 
 
@@ -238,8 +207,8 @@ function renderData(data) {
   setEl('count-nonfb',    (data.not_following_back_count || 0) + ' pessoas');
   setEl('count-younotfb', (youNotFB || 0) + ' pessoas');
 
-  renderList('list-nonfb',    data.not_following_back,     'Deixar de seguir', '/action/unfollow');
-  renderList('list-younotfb', data.you_not_following_back, 'Seguir',           '/action/follow');
+  renderList('list-nonfb',    data.not_following_back);
+  renderList('list-younotfb', data.you_not_following_back);
 }
 
 

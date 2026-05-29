@@ -6,7 +6,7 @@ import json
 import os
 
 import requests
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
 
 app = Flask(__name__)
@@ -92,7 +92,10 @@ def fetch_friendship_users(http, user_id, relation):
         for user in payload.get("users", []):
             username = user.get("username")
             if username:
-                users[username] = user.get("full_name") or username
+                users[username] = {
+                    "full_name": user.get("full_name") or username,
+                    "profile_pic_url": user.get("profile_pic_url") or "",
+                }
 
         max_id = payload.get("next_max_id")
         if not max_id:
@@ -101,11 +104,19 @@ def fetch_friendship_users(http, user_id, relation):
 
 def build_stats_data(user_id, followers, following):
     not_following_back = [
-        {"username": username, "full_name": following[username]}
+        {
+            "username": username,
+            "full_name": following[username]["full_name"],
+            "profile_pic_url": following[username]["profile_pic_url"],
+        }
         for username in following if username not in followers
     ]
     you_not_following_back = [
-        {"username": username, "full_name": followers[username]}
+        {
+            "username": username,
+            "full_name": followers[username]["full_name"],
+            "profile_pic_url": followers[username]["profile_pic_url"],
+        }
         for username in followers if username not in following
     ]
 
@@ -128,6 +139,17 @@ def collect_profile_stats(sessionid, user_id):
     followers = fetch_friendship_users(http, user_id, "followers")
     following = fetch_friendship_users(http, user_id, "following")
     return build_stats_data(user_id, followers, following)
+
+
+def is_allowed_avatar_url(url):
+    return (
+        url.startswith("https://")
+        and (
+            "cdninstagram.com" in url
+            or "fbcdn.net" in url
+            or "instagram.com" in url
+        )
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -236,6 +258,24 @@ def export_csv():
         mimetype="text/csv",
         as_attachment=True,
         download_name=f"insta_tracker_{session['user_id']}.csv",
+    )
+
+
+@app.route("/avatar")
+@login_required
+def avatar_proxy():
+    image_url = request.args.get("url", "")
+    if not is_allowed_avatar_url(image_url):
+        abort(400)
+
+    http = make_instagram_session(session["sessionid"])
+    response = http.get(image_url, timeout=20)
+    response.raise_for_status()
+
+    return Response(
+        response.content,
+        content_type=response.headers.get("Content-Type", "image/jpeg"),
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 
