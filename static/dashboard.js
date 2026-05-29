@@ -38,6 +38,47 @@ function setEl(id, value) {
   if (el) el.textContent = value;
 }
 
+function getFilterSettings() {
+  return {
+    search: (document.getElementById('filter-search')?.value || '').trim().toLowerCase(),
+    limit: document.getElementById('filter-limit')?.value || '25',
+    sort: document.getElementById('filter-sort')?.value || 'username-asc',
+  };
+}
+
+function applyListFilters(users) {
+  const filters = getFilterSettings();
+  let filtered = [...(users || [])];
+
+  if (filters.search) {
+    filtered = filtered.filter(user => {
+      const username = (user.username || '').toLowerCase();
+      const fullName = (user.full_name || '').toLowerCase();
+      return username.includes(filters.search) || fullName.includes(filters.search);
+    });
+  }
+
+  const [field, direction] = filters.sort.split('-');
+  filtered.sort((a, b) => {
+    const key = field === 'name' ? 'full_name' : 'username';
+    const left = (a[key] || a.username || '').localeCompare(b[key] || b.username || '', 'pt-BR', {
+      sensitivity: 'base',
+    });
+    return direction === 'desc' ? -left : left;
+  });
+
+  if (filters.limit !== 'all') {
+    filtered = filtered.slice(0, Number(filters.limit));
+  }
+
+  return filtered;
+}
+
+function countLabel(visible, total) {
+  if (visible === total) return total + ' pessoas';
+  return visible + ' de ' + total;
+}
+
 
 /* ══════════════════════════════════════════════════════
    PROGRESS OVERLAY
@@ -183,7 +224,25 @@ function updateDelta(elId, delta) {
 
 
 /* ── Render all data to DOM ── */
+let currentData = null;
+
+function renderFilteredLists() {
+  if (!currentData) return;
+
+  const notFollowingBack = currentData.not_following_back || [];
+  const youNotFollowingBack = currentData.you_not_following_back || [];
+  const visibleNotFollowingBack = applyListFilters(notFollowingBack);
+  const visibleYouNotFollowingBack = applyListFilters(youNotFollowingBack);
+
+  setEl('count-nonfb', countLabel(visibleNotFollowingBack.length, notFollowingBack.length));
+  setEl('count-younotfb', countLabel(visibleYouNotFollowingBack.length, youNotFollowingBack.length));
+
+  renderList('list-nonfb', visibleNotFollowingBack);
+  renderList('list-younotfb', visibleYouNotFollowingBack);
+}
+
 function renderData(data) {
+  currentData = data;
   const name = data.full_name || data.username || '';
   setEl('avatar-initials', initials(name));
   setEl('profile-name',    name);
@@ -204,11 +263,7 @@ function renderData(data) {
   updateBar('bar-nonfb',     'barnum-nonfb',     data.not_following_back_count || 0, max);
   updateBar('bar-younotfb',  'barnum-younotfb',  youNotFB, max);
 
-  setEl('count-nonfb',    (data.not_following_back_count || 0) + ' pessoas');
-  setEl('count-younotfb', (youNotFB || 0) + ' pessoas');
-
-  renderList('list-nonfb',    data.not_following_back);
-  renderList('list-younotfb', data.you_not_following_back);
+  renderFilteredLists();
 }
 
 
@@ -218,9 +273,15 @@ function renderData(data) {
 
 let activeEventSource = null;
 
+function setRefreshLoading(isLoading) {
+  document.querySelectorAll('.btn-refresh-list').forEach(btn => {
+    btn.classList.toggle('loading', isLoading);
+    btn.disabled = isLoading;
+  });
+}
+
 function loadData() {
-  const btn = document.getElementById('btn-refresh');
-  if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+  setRefreshLoading(true);
 
   // Fecha conexão anterior se ainda aberta
   if (activeEventSource) {
@@ -250,7 +311,7 @@ function loadData() {
       }
 
       setEl('last-update', 'Erro: ' + msg.error);
-      if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+      setRefreshLoading(false);
       return;
     }
 
@@ -265,7 +326,7 @@ function loadData() {
       setTimeout(() => {
         hideOverlay();
         renderData(msg.data);
-        if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+        setRefreshLoading(false);
       }, 700);
     }
   };
@@ -275,10 +336,16 @@ function loadData() {
     activeEventSource = null;
     hideOverlay();
     setEl('last-update', 'Erro ao conectar. Tente novamente.');
-    if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+    setRefreshLoading(false);
   };
 }
 
 
 /* ── Init ── */
+['filter-search', 'filter-limit', 'filter-sort'].forEach(id => {
+  const el = document.getElementById(id);
+  el?.addEventListener('input', renderFilteredLists);
+  el?.addEventListener('change', renderFilteredLists);
+});
+
 loadData();

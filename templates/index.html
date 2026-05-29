@@ -85,6 +85,41 @@
       </div>
     </div>
 
+    <!-- Filters -->
+    <div class="card filters-card">
+      <div class="card-header">
+        <div class="card-title"><i class="ti ti-adjustments-horizontal"></i> Filtros das listas</div>
+      </div>
+      <div class="filters-grid">
+        <div class="filter-field filter-search">
+          <label for="filter-search">Buscar</label>
+          <div class="input-wrap">
+            <i class="ti ti-search"></i>
+            <input type="search" id="filter-search" placeholder="Nome ou @usuario" autocomplete="off" />
+          </div>
+        </div>
+        <div class="filter-field">
+          <label for="filter-limit">Mostrar</label>
+          <select id="filter-limit">
+            <option value="10">10 perfis</option>
+            <option value="25" selected>25 perfis</option>
+            <option value="50">50 perfis</option>
+            <option value="100">100 perfis</option>
+            <option value="all">Todos</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-sort">Ordem</label>
+          <select id="filter-sort">
+            <option value="username-asc" selected>@ A-Z</option>
+            <option value="username-desc">@ Z-A</option>
+            <option value="name-asc">Nome A-Z</option>
+            <option value="name-desc">Nome Z-A</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- Não te seguem de volta -->
     <div class="card">
       <div class="card-header">
@@ -109,7 +144,7 @@
 
     <!-- Actions -->
     <div class="action-bar">
-      <button class="btn btn-primary" id="btn-refresh" onclick="loadData()">
+      <button class="btn btn-primary btn-refresh-list" id="btn-refresh" type="button" onclick="loadData()">
         <i class="ti ti-refresh"></i>
         <span class="btn-text">Atualizar dados</span>
         <span class="btn-spinner"></span>
